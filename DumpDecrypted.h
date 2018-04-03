@@ -10,7 +10,7 @@
 
 -(id)initWithPathToBinary:(NSString *)pathToBinary;
 -(void)createIPAFile;
--(BOOL)dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr image:(int)imageNum;
+-(BOOL)dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr;
 -(NSString *)IPAPath;
 -(void)IPAServer:(int)listenPort;
 -(int)getSocketForPort:(int)listenPort;

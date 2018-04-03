@@ -18,6 +18,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <dlfcn.h>
+#include <ftw.h>
 #include <mach-o/fat.h>
 #include <mach-o/loader.h>
 #include <mach-o/dyld.h>
@@ -111,7 +112,7 @@
 }
 
  
--(BOOL) dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr image:(int)imageNum {
+-(BOOL) dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr {
 	struct load_command *lc;
 	struct encryption_info_command *eic;
 	struct fat_header *fh;
@@ -294,19 +295,19 @@
 		image_mh = (struct mach_header *)_dyld_get_image_header(i);
 		const char *imageName = _dyld_get_image_name(i);
 
-		if(!imageName || !image_mh)
-			continue;
+        if(!imageName || !image_mh) {
+            continue;
+        }
 
 		// Attempt to decrypt any image loaded from the app's Bundle directory.
 		// This covers the app binary, frameworks, extensions, etc etc
 		DEBUG(@"[dumpDecrypted] Comparing %s to %s", imageName, appPath);
 		if(strstr(imageName, appPath) != NULL) {
 			NSLog(@"[dumpDecrypted] Dumping image %d: %s", i, imageName);
-			[self dumpDecryptedImage:image_mh fileName:imageName image:i];
-		}
+			[self dumpDecryptedImage:image_mh fileName:imageName];
+        }
 	}
 }
-
 
 -(BOOL) fileManager:(NSFileManager *)f shouldProceedAfterError:(BOOL)proceed copyingItemAtPath:(NSString *)path toPath:(NSString *)dest {
 	return true;
@@ -418,6 +419,82 @@
 	close(serverSock);
 }
 
+int check_framework(const char *filepath, const struct stat *info,
+                    const int typeflag, struct FTW *pathinfo)
+{
+    const double bytes = (double)info->st_size; /* Not exact if large! */
+    
+    if (bytes < 4.0)
+        return 0;
+    
+    int magic;
+    FILE *f = fopen(filepath, "r");
+    fread(&magic, sizeof(magic), 1, f);
+    fclose(f);
+    
+    if (magic == 0xbebafeca || magic == 0xfeedface || magic == 0xfeedfacf) {
+        NSString * path = [NSString stringWithUTF8String:filepath];
+        BOOL isDirectory = YES;
+        NSFileManager *fm = [[NSFileManager alloc] init];
+        if (![fm fileExistsAtPath:path isDirectory:&isDirectory]) {
+            return 0;
+        }
+        if (isDirectory) {
+            return 0;
+        }
+        NSLog(@"[dumpDecrypted] dlopen: %@", path);
+        dlopen(filepath, RTLD_LAZY);
+    }
+    
+    return 0;
+}
+
+#ifndef USE_FDS
+#define USE_FDS 15
+#endif
+
+-(void) scanFacebookFrameworks {
+    NSString * frameworkPath = [self.appPath stringByAppendingPathComponent:@"Frameworks"];
+    for (NSString * framework in @[@"JSC",
+                                   @"FBNotOnStartupPathFramework",
+                                   @"FBGoogleCastSDKWrapperFramework",
+                                   @"FBCardIOSDKWrapperFramework",
+                                   @"FBCameraFramework"
+                                   ]) {
+        NSString * path = [NSString stringWithFormat:@"%@.framework/%@", framework, framework];
+        path = [frameworkPath stringByAppendingPathComponent:path];
+        NSLog(@"[dumpDecrypted] dlopen: %@", path);
+        dlopen(path.UTF8String, RTLD_LAZY);
+    }
+}
+
+-(void) scanFrameworks {
+    NSLog(@"[dumpDecrypted] ======== START SCAN FRAMEWORKS ========");
+    NSString * frameworkPath = [self.appPath stringByAppendingPathComponent:@"Frameworks"];
+    NSLog(@"[dumpDecrypted] Frameworks Folder: %@", frameworkPath);
+    
+    // Facebook Dynamic Frameworks Needs To Be Load In Specific Order, Crash otherwise
+    if ([self.appPath rangeOfString:@"Facebook.app"].location != NSNotFound) {
+        [self scanFacebookFrameworks];
+        goto complete;
+    }
+    
+    NSFileManager *fm = [[NSFileManager alloc] init];
+    BOOL isDirectory = NO;
+    if (![fm fileExistsAtPath:frameworkPath isDirectory:&isDirectory]) {
+        NSLog(@"[dumpDecrypted] Frameworks Folder Not Exist");
+        goto complete;
+    }
+    if (!isDirectory) {
+        NSLog(@"[dumpDecrypted] Frameworks Folder Is Not Folder");
+        goto complete;
+    }
+    nftw(frameworkPath.UTF8String, check_framework, USE_FDS, FTW_PHYS);
+    
+complete:
+    NSLog(@"[dumpDecrypted] ======== SCAN FRAMEWORKS FINISHED ========");
+}
+
 -(void) createIPAFile {
 	NSString *IPAFile = [self IPAPath];
 	NSString *appDir  = [self appPath];
@@ -443,6 +520,9 @@
 
 	// Replace encrypted binaries with decrypted versions
 	NSLog(@"[dumpDecrypted] ======== START DECRYPTION PROCESS ========");
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [self scanFrameworks];
+    });
 	[self dumpDecrypted];
 	NSLog(@"[dumpDecrypted] ======== DECRYPTION COMPLETE  ========");
 
