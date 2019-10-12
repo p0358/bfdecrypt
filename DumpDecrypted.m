@@ -18,7 +18,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <dlfcn.h>
-#include <ftw.h>
 #include <mach-o/fat.h>
 #include <mach-o/loader.h>
 #include <mach-o/dyld.h>
@@ -49,6 +48,7 @@
 
 #define swap32(value) (((value & 0xFF000000) >> 24) | ((value & 0x00FF0000) >> 8) | ((value & 0x0000FF00) << 8) | ((value & 0x000000FF) << 24) )
 
+
 @implementation DumpDecrypted
 
 -(id) initWithPathToBinary:(NSString *)pathToBinary {
@@ -57,8 +57,13 @@
 	}
 
 	[self setAppPath:[pathToBinary stringByDeletingLastPathComponent]];
-	[self setDocPath:[[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject] path]];
-
+    
+    NSString *docPath = [[[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] lastObject] path];
+    NSDictionary *pathAttrs = [[NSFileManager defaultManager] attributesOfItemAtPath:docPath error:nil];
+    NSLog(@"path: %@ %@", pathAttrs, docPath);
+	[self setDocPath:docPath];
+    
+    //[self setDocPath:@"/var/mobile/Library/Preferences"];
 	char *lastPartOfAppPath = strdup([[self appPath] UTF8String]);
 	lastPartOfAppPath = strrchr(lastPartOfAppPath, '/') + 1;
 	NSLog(@"[dumpdecrypted] init: appDirName: %s", lastPartOfAppPath);
@@ -89,8 +94,8 @@
 
 	DEBUG(@"[dumpdecrypted] encryptedImagePathStr: %s", encryptedImagePathStr);
 	
-	NSFileManager *fm = [[NSFileManager alloc] init];
-	NSError *err;
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSError *err = nil;
 	char *lastPartOfAppPath = strdup(appPath); // Must free()
 	lastPartOfAppPath = strrchr(lastPartOfAppPath, '/');
 	lastPartOfAppPath++;
@@ -112,7 +117,7 @@
 }
 
  
--(BOOL) dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr {
+-(BOOL) dumpDecryptedImage:(const struct mach_header *)image_mh fileName:(const char *)encryptedImageFilenameStr image:(int)imageNum {
 	struct load_command *lc;
 	struct encryption_info_command *eic;
 	struct fat_header *fh;
@@ -295,204 +300,34 @@
 		image_mh = (struct mach_header *)_dyld_get_image_header(i);
 		const char *imageName = _dyld_get_image_name(i);
 
-        if(!imageName || !image_mh) {
-            continue;
-        }
+		if(!imageName || !image_mh)
+			continue;
 
 		// Attempt to decrypt any image loaded from the app's Bundle directory.
 		// This covers the app binary, frameworks, extensions, etc etc
 		DEBUG(@"[dumpDecrypted] Comparing %s to %s", imageName, appPath);
 		if(strstr(imageName, appPath) != NULL) {
 			NSLog(@"[dumpDecrypted] Dumping image %d: %s", i, imageName);
-			[self dumpDecryptedImage:image_mh fileName:imageName];
-        }
+			[self dumpDecryptedImage:image_mh fileName:imageName image:i];
+		}
 	}
 }
+
 
 -(BOOL) fileManager:(NSFileManager *)f shouldProceedAfterError:(BOOL)proceed copyingItemAtPath:(NSString *)path toPath:(NSString *)dest {
 	return true;
 } 
 
+- (BOOL) fileManager:(NSFileManager *)f shouldProceedAfterError:(BOOL)proceed movingItemAtPath:(NSString *)path toPath:(NSString *)dest {
+	return true;
+}
+
 -(NSString *)IPAPath {
+	return [NSString stringWithFormat:@"%@/decrypted-app-temp.ipa", [self docPath]];
+}
+
+-(NSString *)FinalIPAPath {
 	return [NSString stringWithFormat:@"%@/decrypted-app.ipa", [self docPath]];
-}
-
-// Based on code taken from Bishop Fox Firecat
--(int)getSocketForPort:(int)listenPort {
-	struct sockaddr_in a;
-	int IPAServerSock, clientSock;
-	int yes = 1;
-
-	// get a fresh juicy socket
-	DEBUG(@"[dumpDecrypted] socket()");
-	if((IPAServerSock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-		NSLog(@"ERROR: socket()");
-		return 0;
-	}
-	
-	// make sure it's quickly reusable
-	DEBUG(@"[dumpDecrypted] setsockopt()");
-	if(setsockopt(IPAServerSock, SOL_SOCKET, SO_REUSEADDR,	(char *) &yes, sizeof(yes)) < 0) {
-		NSLog(@"ERROR: setsockopt()");
-		close(IPAServerSock);
-		return 0;
-	}
-	
-	// listen on all of the hosts interfaces/addresses (0.0.0.0)
-	DEBUG(@"[dumpDecrypted] bind()");
-	memset(&a, 0, sizeof(a));
-	a.sin_port = htons(listenPort);
-	a.sin_addr.s_addr = htonl(INADDR_ANY);
-	a.sin_family = AF_INET;
-	if(bind(IPAServerSock, (struct sockaddr *) &a, sizeof(a)) < 0) {
-		NSLog(@"ERROR: bind()");
-		close(IPAServerSock);
-		return 0;
-	}
-	DEBUG(@"[dumpDecrypted] listen()");
-	listen(IPAServerSock, 10);
-	
-	return IPAServerSock;
-}
-
--(void)IPAServer:(int)listenPort {
-	unsigned int i;
-	struct sockaddr_in clientAddr;
-	int serverSock, clientSock;
-
-	// get a fresh juicy socket
-	DEBUG(@"[dumpDecrypted] getSocketForPort()");
-	if( ! (serverSock = [self getSocketForPort:listenPort])) {
-		NSLog(@"ERROR: socket()");
-		return;
-	}
-	
-	i = sizeof(clientAddr);
-	
-    NSLog(@"[bfdecrypt] Waiting for connection on port %d\n",listenPort);
-	if((clientSock = accept(serverSock, (struct sockaddr *)&clientAddr, &i)) == -1) {
-		NSLog(@"ERROR: accept(): %s", strerror(errno));
-		return;
-	}
-	
-    NSLog(@"[bfdecrypt] Got connection from remote target %s\n", inet_ntoa(clientAddr.sin_addr));
-    int fd = open([[self IPAPath] UTF8String], O_RDONLY);
-    if(!fd) {
-        NSLog(@"[bfdecrypt] Failed to open the IPA file %@!", [self IPAPath]);
-		return;
-    }
-
-	// I wanted to use sendfile(2), but it's sandboxed by the kernel.
-	char buffer[65535];
-	int loopCount=0, totalBytes=0;
-	DEBUG(@"[bfdecrypt] Entering loop");
-	while (1) {
-		int bytes_read = read(fd, buffer, sizeof(buffer));
-		totalBytes += bytes_read;
-		DEBUG(@"[bfdecrypt] %d: Read %d (%d total) bytes from IPA file", loopCount++, bytes_read, totalBytes);
-		if(bytes_read == 0) // We're done reading from the file
-			break;
-
-		if(bytes_read < 0) {
-			NSLog(@"[bfdecrypt] Failed to read() from IPA file");
-			break;
-		}
-
-		void *p = buffer;
-		while(bytes_read > 0) {
-			DEBUG(@"[bfdecrypt] Sending %d bytes", bytes_read);
-			int bytes_written = send(clientSock, p, bytes_read, 0);
-			if (bytes_written <= 0) {
-				// handle errors
-				NSLog(@"[bfdecrypt] Error sending!");
-				break;
-			}
-			bytes_read -= bytes_written;
-			p += bytes_written;
-		}
-	}
-
-	close(fd);
-	shutdown(clientSock, SHUT_RDWR);
-	shutdown(serverSock, SHUT_RDWR);
-    close(clientSock);
-	close(serverSock);
-}
-
-int check_framework(const char *filepath, const struct stat *info,
-                    const int typeflag, struct FTW *pathinfo)
-{
-    const double bytes = (double)info->st_size; /* Not exact if large! */
-    
-    if (bytes < 4.0)
-        return 0;
-    
-    int magic;
-    FILE *f = fopen(filepath, "r");
-    fread(&magic, sizeof(magic), 1, f);
-    fclose(f);
-    
-    if (magic == 0xbebafeca || magic == 0xfeedface || magic == 0xfeedfacf) {
-        NSString * path = [NSString stringWithUTF8String:filepath];
-        BOOL isDirectory = YES;
-        NSFileManager *fm = [[NSFileManager alloc] init];
-        if (![fm fileExistsAtPath:path isDirectory:&isDirectory]) {
-            return 0;
-        }
-        if (isDirectory) {
-            return 0;
-        }
-        NSLog(@"[dumpDecrypted] dlopen: %@", path);
-        dlopen(filepath, RTLD_LAZY);
-    }
-    
-    return 0;
-}
-
-#ifndef USE_FDS
-#define USE_FDS 15
-#endif
-
--(void) scanFacebookFrameworks {
-    NSString * frameworkPath = [self.appPath stringByAppendingPathComponent:@"Frameworks"];
-    for (NSString * framework in @[@"JSC",
-                                   @"FBNotOnStartupPathFramework",
-                                   @"FBGoogleCastSDKWrapperFramework",
-                                   @"FBCardIOSDKWrapperFramework",
-                                   @"FBCameraFramework"
-                                   ]) {
-        NSString * path = [NSString stringWithFormat:@"%@.framework/%@", framework, framework];
-        path = [frameworkPath stringByAppendingPathComponent:path];
-        NSLog(@"[dumpDecrypted] dlopen: %@", path);
-        dlopen(path.UTF8String, RTLD_LAZY);
-    }
-}
-
--(void) scanFrameworks {
-    NSLog(@"[dumpDecrypted] ======== START SCAN FRAMEWORKS ========");
-    NSString * frameworkPath = [self.appPath stringByAppendingPathComponent:@"Frameworks"];
-    NSLog(@"[dumpDecrypted] Frameworks Folder: %@", frameworkPath);
-    
-    // Facebook Dynamic Frameworks Needs To Be Load In Specific Order, Crash otherwise
-    if ([self.appPath rangeOfString:@"Facebook.app"].location != NSNotFound) {
-        [self scanFacebookFrameworks];
-        goto complete;
-    }
-    
-    NSFileManager *fm = [[NSFileManager alloc] init];
-    BOOL isDirectory = NO;
-    if (![fm fileExistsAtPath:frameworkPath isDirectory:&isDirectory]) {
-        NSLog(@"[dumpDecrypted] Frameworks Folder Not Exist");
-        goto complete;
-    }
-    if (!isDirectory) {
-        NSLog(@"[dumpDecrypted] Frameworks Folder Is Not Folder");
-        goto complete;
-    }
-    nftw(frameworkPath.UTF8String, check_framework, USE_FDS, FTW_PHYS);
-    
-complete:
-    NSLog(@"[dumpDecrypted] ======== SCAN FRAMEWORKS FINISHED ========");
 }
 
 -(void) createIPAFile {
@@ -500,13 +335,16 @@ complete:
 	NSString *appDir  = [self appPath];
 	NSString *appCopyDir = [NSString stringWithFormat:@"%@/ipa/Payload/%s", [self docPath], self->appDirName];
 	NSString *zipDir = [NSString stringWithFormat:@"%@/ipa", [self docPath]];
-	NSFileManager *fm = [[NSFileManager alloc] init];
-	NSError *err;
+	NSFileManager *fm = [NSFileManager defaultManager];
+	NSError *err = nil;
 
 	[fm removeItemAtPath:IPAFile error:nil];
 	[fm removeItemAtPath:appCopyDir error:nil];
-	[fm createDirectoryAtPath:appCopyDir withIntermediateDirectories:true attributes:nil error:nil];
-
+	[fm createDirectoryAtPath:appCopyDir withIntermediateDirectories:true attributes:nil error:&err];
+    //mkdir([appCopyDir UTF8String]);
+    mkdir([appCopyDir UTF8String], 0755);
+    chown([appCopyDir UTF8String], 501, 501);
+    NSLog(@"create directory error: %@", err);
 	[fm setDelegate:(id<NSFileManagerDelegate>)self];
 
 	NSLog(@"[dumpDecrypted] ======== START FILE COPY - IGNORE ANY SANDBOX WARNINGS ========");
@@ -516,13 +354,11 @@ complete:
 	NSLog(@"[dumpDecrypted] zipDir: %@", zipDir);
 	
 	[fm copyItemAtPath:appDir toPath:appCopyDir error:&err];
+    NSLog(@"error: %@", err);
 	NSLog(@"[dumpDecrypted] ======== END OF FILE COPY ========");
 
 	// Replace encrypted binaries with decrypted versions
 	NSLog(@"[dumpDecrypted] ======== START DECRYPTION PROCESS ========");
-    dispatch_sync(dispatch_get_main_queue(), ^{
-        [self scanFrameworks];
-    });
 	[self dumpDecrypted];
 	NSLog(@"[dumpDecrypted] ======== DECRYPTION COMPLETE  ========");
 
@@ -541,6 +377,12 @@ complete:
 										progressHandler:nil
 		];
 		NSLog(@"[dumpDecrypted] ========  ZIP operation complete: %s ========", (success)?"success":"failed");
+		
+		// Rename file
+		NSError * err2;
+		BOOL result = [[NSFileManager defaultManager] moveItemAtPath:[self IPAPath] toPath:[self FinalIPAPath] error:&err2];
+		if(!result)
+			NSLog(@"[dumpDecrypted] error when renaming: %@", err2);
 	}
 	@catch(NSException *e) {
 		NSLog(@"[dumpDecrypted] BAAAAAAAARF during ZIP operation!!! , %@", e);
@@ -550,36 +392,22 @@ complete:
 	// Clean up. Leave only the .ipa file.
 	[fm removeItemAtPath:zipDir error:nil];
 
-	NSLog(@"[dumpDecrypted] ======== Wrote %@ ========", [self IPAPath]);
+	NSLog(@"[dumpDecrypted] ======== Wrote %@ ========", [self FinalIPAPath]);
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+            [self sendIPAToBreezy];
+        
+    });
+     
 	return;
 }
 
+- (void)sendIPAToBreezy {
+    
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@", [self FinalIPAPath]]];
+    NSLog(@"[dumpdecrypted] AirDrop URL: %@" ,url);
+    [[UIApplication sharedApplication] openURL:url];
 
-// Slightly tweaked version of this:
-// https://stackoverflow.com/questions/6807788/how-to-get-ip-address-of-iphone-programmatically
-- (NSDictionary *)getIPAddresses {
-	NSMutableDictionary *addresses = [[NSMutableDictionary alloc] init];
-    struct ifaddrs *interfaces = NULL;
-    struct ifaddrs *temp_addr = NULL;
-    int success = 0;
-    // retrieve the current interfaces - returns 0 on success
-    success = getifaddrs(&interfaces);
-    if (success == 0) {
-        // Loop through linked list of interfaces
-        temp_addr = interfaces;
-        while(temp_addr != NULL) {
-            if(temp_addr->ifa_addr->sa_family == AF_INET) {
-				DEBUG(@"Got IF %s  // ip: %s", temp_addr->ifa_name, inet_ntoa(((struct sockaddr_in *)temp_addr->ifa_addr)->sin_addr));
-                // Check if interface is en0 which is the wifi connection on the iPhone
-				[addresses 	setValue:[NSString stringWithUTF8String:inet_ntoa(((struct sockaddr_in *)temp_addr->ifa_addr)->sin_addr)]
-							forKey:[NSString stringWithUTF8String:temp_addr->ifa_name]];
-            }
-            temp_addr = temp_addr->ifa_next;
-        }
-    }
-    // Free memory
-    freeifaddrs(interfaces);
-    return addresses;
-} 
+}
 
 @end

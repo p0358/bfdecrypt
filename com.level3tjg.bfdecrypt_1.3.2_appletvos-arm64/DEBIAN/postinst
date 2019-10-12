@@ -1,0 +1,3 @@
+#!/bin/bash
+
+jtool --sign platform --inplace /Library/MobileSubstrate/DynamicLibraries/bfdecrypt.dylib

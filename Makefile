@@ -21,7 +21,7 @@ OBJS=$(addsuffix .o,$(basename $(BFINJECT_SRC))) \
 	$(addsuffix .o,$(basename $(MINIZIP_SRC))) \
 	$(addsuffix .o,$(basename $(SSZIPARCHIVE_SRC)))
 
-SDK=$(shell xcodebuild -showsdks| grep iphoneos | awk '{print $$4}')
+SDK=$(shell xcodebuild -showsdks| grep appletvos | awk '{print $$4}')
 SDK_PATH=$(shell xcrun --sdk $(SDK) --show-sdk-path)
 
 CC=$(shell xcrun --sdk $(SDK) --find clang)
@@ -30,13 +30,13 @@ LD=$(CXX)
 INCLUDES=-I $(SDK_PATH)/usr/include -I SSZipArchive -I SSZipArchive/minizip
 ARCHS=-arch arm64
 
-IOS_FLAGS=-isysroot $(SDK_PATH) -miphoneos-version-min=11.0
+IOS_FLAGS=-isysroot $(SDK_PATH) -mtvos-version-min=12.0
 CFLAGS=$(IOS_FLAGS) -g $(ARCHS) $(INCLUDES) -Wdeprecated-declarations
 CXXFLAGS=$(IOS_FLAGS) -g $(ARCHS) $(INCLUDES) -Wdeprecated-declarations
 
-FRAMEWORKS=-framework CoreFoundation -framework IOKit -framework Foundation -framework JavaScriptCore -framework UIKit -framework Security -framework CFNetwork -framework CoreGraphics
+FRAMEWORKS=-framework CoreFoundation -framework IOKit -framework Foundation -framework JavaScriptCore -framework UIKit -framework Security -framework CFNetwork -framework CoreGraphics 
 LIBS=-lobjc -L$(SDK_PATH)/usr/lib -lz -lsqlite3 -lxml2 -lz -ldl -lSystem #$(SDK_PATH)/usr/lib/libstdc++.tbd 
-LDFLAGS=$(IOS_FLAGS) $(ARCHS) $(FRAMEWORKS) $(LIBS)  -ObjC -all_load
+LDFLAGS=$(IOS_FLAGS) $(ARCHS) $(FRAMEWORKS) $(LIBS)  -ObjC -all_load -F.
 MAKE=$(shell xcrun --sdk $(SDK) --find make)
 
 DEVELOPERID=$(shell security find-identity -v -p codesigning | grep "iPhone Developer:" |awk '{print $$2}')
@@ -46,7 +46,7 @@ all: $(DYLIBS)
 $(DYLIBS): $(OBJS)
 	$(CXX) $(CXXFLAGS) bfdecrypt.o -shared -o bfdecrypt.dylib -dynamic DumpDecrypted.m $(addsuffix .o,$(basename $(MINIZIP_SRC))) \
 	$(addsuffix .o,$(basename $(SSZIPARCHIVE_SRC))) \
-	$(LIBS) $(FRAMEWORKS) -ObjC
+	$(LIBS) $(FRAMEWORKS) -ObjC -F. 
 	
 $(BINARY_NAME): $(OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@

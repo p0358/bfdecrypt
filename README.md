@@ -1,7 +1,7 @@
 # bfdecrypt
-Utility to decrypt App Store apps on jailbroken iOS 11.x
+Utility to decrypt App Store apps on jailbroken iOS/tvOS 12.x
 
-## Decrypt App Store apps on LiberiOS
+## Decrypt App Store apps on Chimera
 Here's an example using https://github.com/BishopFox/bfinject to decrypt the Reddit app on an Electra-jailbroken iPhone:
 
 ```
