@@ -404,7 +404,7 @@
 
 - (void)sendIPAToBreezy {
     
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@", [self FinalIPAPath]]];
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@?sender=%@", [self FinalIPAPath], [[NSBundle mainBundle] bundleIdentifier]]];
     [[UIApplication sharedApplication] openURL:url];
     NSLog(@"[dumpdecrypted] AirDrop URL: %@" ,url);
 }
