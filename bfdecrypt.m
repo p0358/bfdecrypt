@@ -13,7 +13,10 @@
 #import <UIKit/UIKit.h>
 #include <stdint.h>
 #include "DumpDecrypted.h"
-
+#include <TargetConditionals.h>
+@interface UIWindow (private)
+- (void)orderOut:(id)sender;
+@end
 UIWindow *alertWindow = NULL;
 UIWindow *kw = NULL;
 UIViewController *root = NULL;
@@ -24,7 +27,8 @@ UIAlertController *errorController = NULL;
 // The dylib constructor sets decryptedIPAPath, spawns a thread to do the app decryption, then exits.
 __attribute__ ((constructor)) static void bfinject_rocknroll() {
     
-    NSNumber *value = [[[NSDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist"] objectForKey:[[NSBundle mainBundle] bundleIdentifier]];
+    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
+    NSNumber *value = [[[NSDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist"] objectForKey:bundleID];
     if ([value boolValue] == YES) {
         NSLog(@"[bfdecrypt] Spawning thread to do decryption in the background...");
         
@@ -61,11 +65,24 @@ __attribute__ ((constructor)) static void bfinject_rocknroll() {
             });
             
             // Do the decryption
-            [dd createIPAFile];
+            NSString *outputFile = [dd createIPAFile];
             //[dd show]
             // Dismiss the alert box
             dispatch_async(dispatch_get_main_queue(), ^{
-                [alertController dismissViewControllerAnimated:NO completion:nil];
+                [alertController dismissViewControllerAnimated:NO completion:^{
+                    [alertWindow orderOut:nil];
+                    #if !TARGET_OS_TV
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        NSURL *path = [NSURL fileURLWithPath:outputFile];
+                        UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:@[path] applicationActivities:nil];
+                        [[[[UIApplication sharedApplication] keyWindow] rootViewController] presentViewController:activityViewController animated:true completion:nil];
+                    });
+                
+                    #endif
+                }];
+                
+                
+                
             }); // dispatch on main
                         
             NSLog(@"[bfdecrypt] Over and out.");

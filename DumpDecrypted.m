@@ -42,23 +42,28 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include "DumpDecrypted.h"
+#include <TargetConditionals.h>
 
-//#define DEBUG(...) NSLog(__VA_ARGS__);
-#define DEBUG(...) {}
+
+#define DEBUG(...) NSLog(__VA_ARGS__);
+//#define DEBUG(...) {}
 
 #define swap32(value) (((value & 0xFF000000) >> 24) | ((value & 0x00FF0000) >> 8) | ((value & 0x0000FF00) << 8) | ((value & 0x000000FF) << 24) )
 
 
 @implementation DumpDecrypted
 
+
 -(id) initWithPathToBinary:(NSString *)pathToBinary {
 	if(!self) {
 		self = [super init];
 	}
-
 	[self setAppPath:[pathToBinary stringByDeletingLastPathComponent]];
-    
+#if TARGET_OS_TV
     NSString *docPath = [[[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] lastObject] path];
+#else
+    NSString *docPath = [[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject] path];
+#endif
     NSDictionary *pathAttrs = [[NSFileManager defaultManager] attributesOfItemAtPath:docPath error:nil];
     NSLog(@"path: %@ %@", pathAttrs, docPath);
 	[self setDocPath:docPath];
@@ -330,7 +335,7 @@
 	return [NSString stringWithFormat:@"%@/decrypted-app.ipa", [self docPath]];
 }
 
--(void) createIPAFile {
+-(NSString *) createIPAFile {
 	NSString *IPAFile = [self IPAPath];
 	NSString *appDir  = [self appPath];
 	NSString *appCopyDir = [NSString stringWithFormat:@"%@/ipa/Payload/%s", [self docPath], self->appDirName];
@@ -399,14 +404,16 @@
         
     });
      
-	return;
+	return [self FinalIPAPath];
 }
 
 - (void)sendIPAToBreezy {
-    
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@?sender=%@", [self FinalIPAPath], [[NSBundle mainBundle] bundleIdentifier]]];
-    [[UIApplication sharedApplication] openURL:url];
-    NSLog(@"[dumpdecrypted] AirDrop URL: %@" ,url);
+
+    #if TARGET_OS_TV
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@?sender=%@", [self FinalIPAPath], [[NSBundle mainBundle] bundleIdentifier]]];
+        [[UIApplication sharedApplication] openURL:url];
+        NSLog(@"[dumpdecrypted] AirDrop URL: %@" ,url);
+    #endif
 }
 
 @end
