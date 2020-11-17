@@ -1,0 +1,16 @@
+#!/bin/sh
+
+if [ -e /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist ]; then
+    echo "bfdecrypt updated/reinstalled, updating tweak inject filter from preferences"
+    cp /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist /Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist
+fi
+
+if [ ! -e /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist ]; then
+	echo "First time installing bfdecrypt"
+    cp /Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist
+    chown mobile:wheel /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist
+    chmod 644 /Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist
+fi
+
+chown mobile:wheel /Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist
+chmod 644 /Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist
