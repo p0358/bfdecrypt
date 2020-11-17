@@ -14,11 +14,13 @@
 #include <stdint.h>
 #include "DumpDecrypted.h"
 #include <TargetConditionals.h>
+//#import <Cephei/HBPreferences.h>
 @interface UIWindow (private)
 - (void)orderOut:(id)sender;
 @end
 UIWindow *alertWindow = NULL;
 UIWindow *kw = NULL;
+UIWindow *originalWindow;
 UIViewController *root = NULL;
 UIAlertController *alertController = NULL;
 UIAlertController *ncController = NULL;
@@ -44,6 +46,8 @@ __attribute__ ((constructor)) static void bfinject_rocknroll() {
             NSLog(@"[bfdecrypt] Full path to app: %s   ///   IPA File: %@", fullPathStr, [dd IPAPath]);
 
             dispatch_async(dispatch_get_main_queue(), ^{
+                //UIWindow *originalWindow = [[UIApplication sharedApplication] keyWindow];
+                UIWindow *originalWindow = [[[UIApplication sharedApplication] delegate] window];
                 alertWindow = [[UIWindow alloc] initWithFrame: [UIScreen mainScreen].bounds];
                 alertWindow.rootViewController = [UIViewController new];
                 alertWindow.windowLevel = UIWindowLevelAlert + 1;
@@ -70,15 +74,81 @@ __attribute__ ((constructor)) static void bfinject_rocknroll() {
             // Dismiss the alert box
             dispatch_async(dispatch_get_main_queue(), ^{
                 [alertController dismissViewControllerAnimated:NO completion:^{
-                    [alertWindow orderOut:nil];
-                    #if !TARGET_OS_TV
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        NSURL *path = [NSURL fileURLWithPath:outputFile];
-                        UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:@[path] applicationActivities:nil];
-                        [[[[UIApplication sharedApplication] keyWindow] rootViewController] presentViewController:activityViewController animated:true completion:nil];
-                    });
-                
-                    #endif
+
+                    ncController = [UIAlertController
+                        alertControllerWithTitle:@"Decryption complete!"
+                        message:[NSString stringWithFormat:@"Saved decrypted IPA to:\n%@", outputFile]
+                        preferredStyle:UIAlertControllerStyleAlert];
+
+                    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Done" style:UIAlertActionStyleCancel
+                        handler:^(UIAlertAction *action) {
+                            NSLog(@"Cancel action");
+                            [ncController dismissViewControllerAnimated:NO completion:nil];
+                            kw.hidden = true;
+                            [originalWindow makeKeyAndVisible];
+                            [kw removeFromSuperview];
+                            kw = nil;
+                            ncController = nil;
+                        }];
+
+                    UIAlertAction *copyAction = [UIAlertAction actionWithTitle:@"Copy path" style:UIAlertActionStyleDefault
+                        handler:^(UIAlertAction *action) {
+                            NSLog(@"Copy action");
+                            UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+                            pasteboard.string = outputFile;
+                            [ncController dismissViewControllerAnimated:NO completion:nil];
+                            kw.hidden = true;
+                            [originalWindow makeKeyAndVisible];
+                            [kw removeFromSuperview];
+                            kw = nil;
+                            ncController = nil;
+                        }];
+
+                    UIAlertAction *shareAction = [UIAlertAction actionWithTitle:@"Share file" style:UIAlertActionStyleDefault
+                        handler:^(UIAlertAction *action) {
+                            NSLog(@"Share action");
+                            [ncController dismissViewControllerAnimated:NO completion:nil];
+
+                            NSURL *fileURL = [NSURL fileURLWithPath:outputFile];
+                            NSArray *activityItems = @[fileURL];
+                            UIActivityViewController *activityViewController = [[UIActivityViewController alloc] initWithActivityItems:activityItems applicationActivities:nil];
+                            activityViewController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+
+                            [root presentViewController:activityViewController animated:YES completion:nil];
+
+                            activityViewController.completionWithItemsHandler = ^(NSString *activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
+                                kw.hidden = true;
+                                [originalWindow makeKeyAndVisible];
+                                [kw removeFromSuperview];
+                                kw = nil;
+                                ncController = nil;
+                            };
+                        }];
+
+                    /*UIAlertAction *removePrefAction = [UIAlertAction actionWithTitle:@"Finish"
+                        style:UIAlertActionStyleDefault
+                        handler:^(UIAlertAction *action) {
+                            NSLog(@"Remove pref (finish) action");
+
+                            // it's crashing, meh
+                            HBPreferences *preferences = [HBPreferences preferencesForIdentifier:@"com.level3tjg.bfdecrypt"];
+                            [preferences removeObjectForKey:[[NSBundle mainBundle] bundleIdentifier]];
+                            [preferences synchronize];
+
+                            kw.hidden = true;
+                            [originalWindow makeKeyAndVisible];
+                            [kw removeFromSuperview];
+                            kw = nil;
+                            ncController = nil;
+                        }];*/
+
+                    
+                    [ncController addAction:copyAction];
+                    [ncController addAction:shareAction];
+                    //[ncController addAction:removePrefAction];
+                    [ncController addAction:cancelAction];
+                    [root presentViewController:ncController animated:YES completion:nil];
+                    alertController = nil;
                 }];
                 
                 

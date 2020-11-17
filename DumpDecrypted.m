@@ -59,19 +59,20 @@
 		self = [super init];
 	}
 	[self setAppPath:[pathToBinary stringByDeletingLastPathComponent]];
-#if TARGET_OS_TV
-    NSString *docPath = [[[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] lastObject] path];
-#else
-    NSString *docPath = [[[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject] path];
-#endif
+
+    NSString *docPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
+
     NSDictionary *pathAttrs = [[NSFileManager defaultManager] attributesOfItemAtPath:docPath error:nil];
-    NSLog(@"path: %@ %@", pathAttrs, docPath);
+    NSLog(@"[dumpDecrypted] docPath: %@", docPath);
+	if (pathAttrs) {
+    	NSLog(@"[dumpDecrypted] pathAttrs: %@", [[[NSString stringWithFormat:@"%@", pathAttrs] stringByReplacingOccurrencesOfString:@"\n" withString:@""] stringByReplacingOccurrencesOfString:@"    " withString:@" "]);
+	}
 	[self setDocPath:docPath];
     
     //[self setDocPath:@"/var/mobile/Library/Preferences"];
 	char *lastPartOfAppPath = strdup([[self appPath] UTF8String]);
 	lastPartOfAppPath = strrchr(lastPartOfAppPath, '/') + 1;
-	NSLog(@"[dumpdecrypted] init: appDirName: %s", lastPartOfAppPath);
+	NSLog(@"[dumpDecrypted] init: appDirName: %s", lastPartOfAppPath);
 	self->appDirName = strdup(lastPartOfAppPath);
 
 	return self;
@@ -82,6 +83,7 @@
 	char *appPath = (char *)[[self appPath] UTF8String];
 	char *docPath = (char *)[[self docPath] UTF8String];
 	char *savePtr;
+	char *savePtr2;
 	char *encryptedImagePathStr = savePtr = strdup(encryptedImageFilenameStr);
 	self->filename = strdup(strrchr(encryptedImagePathStr, '/') + 1);
 
@@ -97,11 +99,11 @@
 	if(p)
 		*p = '\0';
 
-	DEBUG(@"[dumpdecrypted] encryptedImagePathStr: %s", encryptedImagePathStr);
+	DEBUG(@"[dumpDecrypted] encryptedImagePathStr: %s", encryptedImagePathStr);
 	
 	NSFileManager *fm = [NSFileManager defaultManager];
 	NSError *err = nil;
-	char *lastPartOfAppPath = strdup(appPath); // Must free()
+	char *lastPartOfAppPath = savePtr2 = strdup(appPath); // Must free()
 	lastPartOfAppPath = strrchr(lastPartOfAppPath, '/');
 	lastPartOfAppPath++;
 	NSString *path = [NSString stringWithFormat:@"%s/ipa/Payload/%s", docPath, lastPartOfAppPath];
@@ -109,12 +111,13 @@
 	if(p)
 		path = [NSString stringWithFormat:@"%@/%s", path, encryptedImagePathStr];
 
-	DEBUG(@"[dumpdecrypted] make_directories making dir: %@", path);
+	DEBUG(@"[dumpDecrypted] make_directories making dir: %@", path);
 	if(! [fm createDirectoryAtPath:path withIntermediateDirectories:true attributes:nil error:&err]) {
-		DEBUG(@"[dumpdecrypted] WARNING: make_directories failed to make directory %@. Error: %@", path, err);
+		DEBUG(@"[dumpDecrypted] WARNING: make_directories failed to make directory %@. Error: %@", path, err);
 	}
 
 	free(savePtr);
+	free(savePtr2);
 
 	snprintf(self->decryptedAppPathStr, PATH_MAX, "%s/%s", [path UTF8String], self->filename);
 
@@ -398,22 +401,8 @@
 	[fm removeItemAtPath:zipDir error:nil];
 
 	NSLog(@"[dumpDecrypted] ======== Wrote %@ ========", [self FinalIPAPath]);
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-            [self sendIPAToBreezy];
-        
-    });
      
 	return [self FinalIPAPath];
-}
-
-- (void)sendIPAToBreezy {
-
-    #if TARGET_OS_TV
-        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"airdropper://%@?sender=%@", [self FinalIPAPath], [[NSBundle mainBundle] bundleIdentifier]]];
-        [[UIApplication sharedApplication] openURL:url];
-        NSLog(@"[dumpdecrypted] AirDrop URL: %@" ,url);
-    #endif
 }
 
 @end
