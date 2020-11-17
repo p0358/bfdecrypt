@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>bfdecrypt Application List</string>
+		</dict>
+		<dict>
+			<key>ALAllowsSelection</key>
+			<string>1</string>
+			<key>ALChangeNotification</key>
+			<string>com.level3tjg.bfdecrypt.settingschanged</string>
+			<key>ALSettingsDefaultValue</key>
+			<string>0</string>
+			<key>ALSettingsKeyPrefix</key>
+			<string></string>
+			<key>ALSettingsPath</key>
+			<string>/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist</string>
+			<key>ALSingleEnabledMode</key>
+			<false/>
+			<key>bundle</key>
+			<string>AppList</string>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>isController</key>
+			<string>1</string>
+			<key>label</key>
+			<string>bfdecrypt enabled applications</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+	</array>
+	<key>title</key>
+	<string>bfdecrypt</string>
+</dict>
+</plist>

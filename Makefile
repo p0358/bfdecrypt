@@ -1,4 +1,8 @@
-DYLIBS=bfdecrypt.dylib
+TARGET := iphone:clang:13.5:12.0
+GO_EASY_ON_ME = 1
+
+ARCHS = arm64 arm64e
+
 BFINJECT_SRC=DumpDecrypted.m bfdecrypt.m
 MINIZIP_SRC=SSZipArchive/minizip/crypt.c \
 SSZipArchive/minizip/ioapi.c \
@@ -17,48 +21,15 @@ SSZipArchive/minizip/aes/prng.c \
 SSZipArchive/minizip/aes/pwd2key.c \
 SSZipArchive/minizip/aes/sha1.c
 SSZIPARCHIVE_SRC=SSZipArchive/SSZipArchive.m
-OBJS=$(addsuffix .o,$(basename $(BFINJECT_SRC))) \
-	$(addsuffix .o,$(basename $(MINIZIP_SRC))) \
-	$(addsuffix .o,$(basename $(SSZIPARCHIVE_SRC)))
 
-SDK=$(shell xcodebuild -showsdks| grep appletvos | awk '{print $$4}')
-SDK_PATH=$(shell xcrun --sdk $(SDK) --show-sdk-path)
+include $(THEOS)/makefiles/common.mk
 
-CC=$(shell xcrun --sdk $(SDK) --find clang)
-CXX=$(shell xcrun --sdk $(SDK) --find clang++)
-LD=$(CXX)
-INCLUDES=-I $(SDK_PATH)/usr/include -I SSZipArchive -I SSZipArchive/minizip
-ARCHS=-arch arm64
+TWEAK_NAME = bfdecrypt
+$(TWEAK_NAME)_FILES = bfdecrypt.m DumpDecrypted.m $(MINIZIP_SRC) $(SSZIPARCHIVE_SRC)
+# 
+$(TWEAK_NAME)_CFLAGS = -fobjc-arc -I SSZipArchive -I SSZipArchive/minizip
+$(TWEAK_NAME)_FRAMEWORKS += CoreFoundation IOKit Foundation JavaScriptCore UIKit Security CFNetwork CoreGraphics
 
-IOS_FLAGS=-isysroot $(SDK_PATH) -mtvos-version-min=12.0
-CFLAGS=$(IOS_FLAGS) -g $(ARCHS) $(INCLUDES) -Wdeprecated-declarations
-CXXFLAGS=$(IOS_FLAGS) -g $(ARCHS) $(INCLUDES) -Wdeprecated-declarations
-
-FRAMEWORKS=-framework CoreFoundation -framework IOKit -framework Foundation -framework JavaScriptCore -framework UIKit -framework Security -framework CFNetwork -framework CoreGraphics 
-LIBS=-lobjc -L$(SDK_PATH)/usr/lib -lz -lsqlite3 -lxml2 -lz -ldl -lSystem #$(SDK_PATH)/usr/lib/libstdc++.tbd 
-LDFLAGS=$(IOS_FLAGS) $(ARCHS) $(FRAMEWORKS) $(LIBS)  -ObjC -all_load -F.
-MAKE=$(shell xcrun --sdk $(SDK) --find make)
-
-DEVELOPERID=$(shell security find-identity -v -p codesigning | grep "iPhone Developer:" |awk '{print $$2}')
-
-all: $(DYLIBS) 
-
-$(DYLIBS): $(OBJS)
-	$(CXX) $(CXXFLAGS) bfdecrypt.o -shared -o bfdecrypt.dylib -dynamic DumpDecrypted.m $(addsuffix .o,$(basename $(MINIZIP_SRC))) \
-	$(addsuffix .o,$(basename $(SSZIPARCHIVE_SRC))) \
-	$(LIBS) $(FRAMEWORKS) -ObjC -F. 
-	
-$(BINARY_NAME): $(OBJS)
-	$(LD) $(LDFLAGS) $^ -o $@
-
-%.o: %.mm $(DEPS)
-	$(CXX) -c $(CXXFLAGS) $< -o $@
-
-%.o: %.c $(DEPS)
-	$(CC) -c $(CFLAGS) $< -o $@
-
-webroot.o: webroot.c
-
-clean:
-	rm -f bfdecrypt.o $(OBJS) 2>&1 > /dev/null
-	rm -f $(DYLIBS) 2>&1 > /dev/null
+include $(THEOS_MAKE_PATH)/tweak.mk
+SUBPROJECTS += prefs
+include $(THEOS_MAKE_PATH)/aggregate.mk
