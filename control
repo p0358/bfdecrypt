@@ -3,7 +3,7 @@ Name: bfdecrypt
 Version: 1.3.3
 Architecture: iphoneos-arm
 Description: bfdecrypt for iOS 12/13/14
-Depends: firmware (>=11.0), preferenceloader
+Depends: firmware (>=11.0), preferenceloader, applist
 Maintainer: level3tjg <tjaygrantham@gmail.com>
 Author: level3tjg <tjaygrantham@gmail.com>
 Section: System
