@@ -124,6 +124,30 @@ __attribute__ ((constructor)) static void bfinject_rocknroll() {
                                 ncController = nil;
                             };
                         }];
+                        
+
+                    bool canOpenInFilza = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"filza://"]];
+                    bool canOpenIniFile = [[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"ifile://"]];
+
+                    UIAlertAction *showInFileExplorerAction = [UIAlertAction actionWithTitle:(canOpenInFilza ? @"Show in Filza" : @"Show in iFile") style:UIAlertActionStyleDefault
+                        handler:^(UIAlertAction *action) {
+                            NSLog(@"Show in file explorer action");
+                            [ncController dismissViewControllerAnimated:NO completion:nil];
+
+                            if (canOpenInFilza) {
+                                NSURL *filzaURL = [NSURL URLWithString:[@"filza://view" stringByAppendingString:outputFile]];
+                                [[UIApplication sharedApplication] openURL:filzaURL options:@{} completionHandler:nil];
+                            } else if (canOpenIniFile) {
+                                NSURL *ifileURL = [NSURL URLWithString:[@"ifile://file://" stringByAppendingString:outputFile]];
+                                [[UIApplication sharedApplication] openURL:ifileURL options:@{} completionHandler:nil];
+                            }
+
+                            kw.hidden = true;
+                            [originalWindow makeKeyAndVisible];
+                            [kw removeFromSuperview];
+                            kw = nil;
+                            ncController = nil;
+                        }];
 
                     /*UIAlertAction *removePrefAction = [UIAlertAction actionWithTitle:@"Finish"
                         style:UIAlertActionStyleDefault
@@ -145,6 +169,8 @@ __attribute__ ((constructor)) static void bfinject_rocknroll() {
                     
                     [ncController addAction:copyAction];
                     [ncController addAction:shareAction];
+                    if (canOpenInFilza || canOpenIniFile)
+                        [ncController addAction:showInFileExplorerAction];
                     //[ncController addAction:removePrefAction];
                     [ncController addAction:cancelAction];
                     [root presentViewController:ncController animated:YES completion:nil];
