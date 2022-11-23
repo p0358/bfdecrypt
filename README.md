@@ -1,5 +1,5 @@
 # bfdecrypt
-Utility to decrypt App Store apps on jailbroken iOS 12/13/14 (tested only on 13 though lol)
+Utility to decrypt App Store apps on jailbroken iOS 12/13/14/15 (tested only on 15 with palera1n and clang from ProcursusTeam)
 
 ## Decrypt App Store apps on Odyssey
 
