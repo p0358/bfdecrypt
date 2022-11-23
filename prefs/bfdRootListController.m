@@ -1,4 +1,8 @@
-#include "bfdRootListController.h"
+#import <Preferences/PSListController.h>
+#import <Preferences/PSSpecifier.h>
+#import "SparkAppListTableViewController.h"
+#import <UIKit/UIKit.h>
+#import "SparkAppList.h"
 
 void ShowAlert(NSString *msg, NSString *title) {
 	UIAlertController * alert = [UIAlertController
@@ -16,34 +20,13 @@ void ShowAlert(NSString *msg, NSString *title) {
     [[[[[UIApplication sharedApplication] delegate] window] rootViewController] presentViewController:alert animated:YES completion:nil];
 }
 
-void reloadPreferences()
-{
-	NSDictionary *preferences = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist"];
-    NSMutableArray *bundles = [[NSMutableArray alloc] init];
 
-    for (NSString *key in preferences) {
-        if ([[preferences objectForKey:key] boolValue] == YES) {
-            [bundles addObject:key];
-        }
-	}
+@interface bfdRootListController: PSListController
+-(void)selectIncludeApps;
+-(void)reloadPreferences:(NSNotification *)notification;
+@end
 
-    NSDictionary *filterDict = @{
-        @"Filter": @{
-            @"Bundles": bundles
-        }
-    };
-    NSLog(@"[bfdecryptPrefs] filterDict: %@", [[[NSString stringWithFormat:@"%@", filterDict] stringByReplacingOccurrencesOfString:@"\n" withString:@""] stringByReplacingOccurrencesOfString:@"    " withString:@" "]);
 
-    @try
-    {
-        [filterDict writeToFile:@"/Library/MobileSubstrate/DynamicLibraries/bfdecrypt_fromprefs.plist" atomically:NO];
-        [filterDict writeToFile:@"/Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist" atomically:NO];
-    }
-    @catch(id anException) {
-        NSLog(@"[bfdecryptPrefs] Error writing preferences");
-        ShowAlert(@"Error writing preferences", @"Error");
-    }
-}
 
 @implementation bfdRootListController
 
@@ -55,11 +38,50 @@ void reloadPreferences()
 	return _specifiers;
 }
 
-@end
-
-__attribute__((constructor))
-static void init(void)
-{
-	reloadPreferences();
-	CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)reloadPreferences, CFSTR("com.level3tjg.bfdecrypt.settingschanged"), NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+-(instancetype)init {
+	self = [super init];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+        selector:@selector(reloadPreferences:)
+        name:@"com.level3tjg.bfdecrypt.sparkapplistupdate"
+        object:nil];
+    [self reloadPreferences:nil];
+    return self;
 }
+
+
+-(void)selectIncludeApps
+{
+    SparkAppListTableViewController* s = [[SparkAppListTableViewController alloc] initWithIdentifier:@"com.level3tjg.bfdecrypt" andKey:@"includedApps"];
+
+    [self.navigationController pushViewController:s animated:YES];
+    self.navigationItem.hidesBackButton = FALSE;
+}
+
+-(void)reloadPreferences:(NSNotification *)notification
+{
+    NSArray *preferences = [SparkAppList getAppListForIdentifier:@"com.level3tjg.bfdecrypt" andKey:@"includedApps"];
+    NSMutableArray *bundles = [[NSMutableArray alloc] init];
+
+    for (NSString *key in preferences) {
+            [bundles addObject:key];
+    }
+
+    NSDictionary *filterDict = @{
+        @"Filter": @{
+            @"Bundles": bundles
+        }
+    };
+    NSLog(@"[bfdecryptPrefs] filterDict: %@", [[[NSString stringWithFormat:@"%@", filterDict] stringByReplacingOccurrencesOfString:@"\n" withString:@""] stringByReplacingOccurrencesOfString:@"    " withString:@" "]);
+    
+    @try
+    {
+//        [filterDict writeToFile:@"/Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist.pref" atomically:NO];
+        [filterDict writeToFile:@"/Library/MobileSubstrate/DynamicLibraries/bfdecrypt.plist" atomically:NO];
+    }   
+    @catch(id anException) {
+        NSLog(@"[bfdecryptPrefs] Error writing preferences");
+        ShowAlert(@"Error writing preferences", @"Error");
+    }   
+}   
+
+@end

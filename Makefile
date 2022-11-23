@@ -1,4 +1,4 @@
-TARGET := iphone:clang:13.5:12.0
+#TARGET := iphone:clang:13.5:12.0
 GO_EASY_ON_ME = 1
 
 ARCHS = arm64 arm64e
@@ -30,6 +30,7 @@ $(TWEAK_NAME)_FILES = bfdecrypt.m DumpDecrypted.m $(MINIZIP_SRC) $(SSZIPARCHIVE_
 $(TWEAK_NAME)_CFLAGS = -fobjc-arc -I SSZipArchive -I SSZipArchive/minizip
 $(TWEAK_NAME)_FRAMEWORKS += CoreFoundation IOKit Foundation JavaScriptCore UIKit Security CFNetwork CoreGraphics
 #$(TWEAK_NAME)_EXTRA_FRAMEWORKS += Cephei
+$(TWEAK_NAME)_LIBRARIES = sparkapplist
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 SUBPROJECTS += prefs

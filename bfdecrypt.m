@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include "DumpDecrypted.h"
 #include <TargetConditionals.h>
+#import "SparkAppList.h"
 //#import <Cephei/HBPreferences.h>
 @interface UIWindow (private)
 - (void)orderOut:(id)sender;
@@ -30,13 +31,20 @@ UIAlertController *errorController = NULL;
 __attribute__ ((constructor)) static void bfinject_rocknroll() {
     
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier];
-    NSNumber *value = [[[NSDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist"] objectForKey:bundleID];
-    if ([value boolValue] == YES) {
+    if (bundleID && ([SparkAppList doesIdentifier:@"com.level3tjg.bfdecrypt" andKey:@"includedApps" containBundleIdentifier:bundleID]) ){ 
         NSLog(@"[bfdecrypt] Spawning thread to do decryption in the background...");
         
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{        
             NSLog(@"[bfdecrypt] Inside decryption thread");
-            const char *fullPathStr = _dyld_get_image_name(0);
+            // traversal all images
+            uint32_t count = _dyld_image_count();
+            const char *fullPathStr;
+            for(uint32_t i = 0; i < count; i++) {
+                fullPathStr = _dyld_get_image_name(i);
+                NSLog(@"tried image[%d] => %s", i, fullPathStr);
+                if(! strstr(fullPathStr, ".dylib") ) break;//set dyld to the first non-lib image
+            }
+            //const char *fullPathStr = _dyld_get_image_name(1);// [0] is /usr/lib/substitute-loader.dylib in my enviroment 
             DumpDecrypted *dd = [[DumpDecrypted alloc] initWithPathToBinary:[NSString stringWithUTF8String:fullPathStr]];
             if(!dd) {
                 NSLog(@"[bfdecrypt] ERROR: failed to get DumpDecrypted instance");
