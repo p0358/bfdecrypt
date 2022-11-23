@@ -10,36 +10,14 @@
 			<key>label</key>
 			<string>bfdecrypt Application List</string>
 		</dict>
-		<dict>
-			<key>ALAllowsSelection</key>
-			<string>1</string>
-			<key>ALChangeNotification</key>
-			<string>com.level3tjg.bfdecrypt.settingschanged</string>
-			<key>ALSettingsDefaultValue</key>
-			<string>0</string>
-			<key>ALSettingsKeyPrefix</key>
-			<string></string>
-			<key>ALSettingsPath</key>
-			<string>/var/mobile/Library/Preferences/com.level3tjg.bfdecrypt.plist</string>
-			<key>ALSingleEnabledMode</key>
-			<false/>
-			<key>bundle</key>
-			<string>AppList</string>
-			<key>cell</key>
-			<string>PSLinkCell</string>
-			<key>isController</key>
-			<string>1</string>
-			<key>label</key>
-			<string>bfdecrypt enabled applications</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-		</dict>
+        <dict>
+            <key>cell</key>
+            <string>PSButtonCell</string>
+            <key>label</key>
+            <string>bfdecrypt enabled applications</string>
+            <key>action</key>
+            <string>selectIncludeApps</string>
+        </dict>
 	</array>
 	<key>title</key>
 	<string>bfdecrypt</string>
